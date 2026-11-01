@@ -1930,6 +1930,7 @@ async function askGameAI() {
     sendButton.textContent = "傳送問題 ↑";
   }
 }
+
 /* ======================================================
    27. 學生 AI 提問紀錄功能
    將學生向 AI 提出的問題加入 Google Sheets 學習紀錄
