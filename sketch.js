@@ -21,7 +21,7 @@ const AI_WORKER_URL =
 const QUESTIONS_PER_GAME = 5;
 
 const STATS_WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbz0oHOtHhaMcnr8TFC2haoEL3Ul1KU-Ql-ijk6qkWJ9TsCaoPbPWUKKAgK3y0NidJGtAQ/exec";
+  "https://script.google.com/macros/s/AKfycbw2oHsoh5c-Lnz5tE2N6IK8IqX5dKehXIDlSl7GCWHRY-DwK2UQVAbgsTdo1seVIV-eTA/exec";
 let gameSessionId = "";
 let gameStartTime = 0;
 let currentPlayerName = "匿名玩家";
@@ -1930,3 +1930,90 @@ async function askGameAI() {
     sendButton.textContent = "傳送問題 ↑";
   }
 }
+/* ======================================================
+   27. 學生 AI 提問紀錄功能
+   將學生向 AI 提出的問題加入 Google Sheets 學習紀錄
+====================================================== */
+
+// 儲存本場遊戲的學生提問
+let aiQuestionsForSession = [];
+
+// 保存原本的開始遊戲函式
+const originalStartGame = startGame;
+
+// 開始新遊戲時清空上一場的提問
+startGame = function () {
+  aiQuestionsForSession = [];
+  return originalStartGame.apply(this, arguments);
+};
+
+// 保存原本的 AI 提問函式
+const originalAskGameAI = askGameAI;
+
+// 在原本 AI 提問功能外增加紀錄
+askGameAI = async function () {
+  const input = document.getElementById("ai-input");
+  const question = input ? input.value.trim() : "";
+
+  // 僅記錄有效、且在遊戲進行中的提問
+  if (
+    question &&
+    question.length <= 2000 &&
+    gameStarted &&
+    !statsSentForSession
+  ) {
+    aiQuestionsForSession.push(question);
+  }
+
+  // 保留原本呼叫 AI 的功能
+  return originalAskGameAI.apply(this, arguments);
+};
+
+// 重新定義學習紀錄送出功能
+sendLearningStats = function (total, correct, accuracy) {
+  if (statsSentForSession) return;
+
+  statsSentForSession = true;
+
+  // 原本六個欄位，加上第七個 AI 提問欄位
+  const payload = {
+    timestamp: new Date().toISOString(),
+    playerName: currentPlayerName,
+    gameSessionId: gameSessionId,
+    totalQuestions: total,
+    correctCount: correct,
+    accuracy: accuracy,
+    aiQuestions: aiQuestionsForSession.join("\n")
+  };
+
+  const status = document.getElementById("stats-save-status");
+
+  if (status) {
+    status.textContent = "正在送出學習紀錄與 AI 提問……";
+  }
+
+  fetch(STATS_WEB_APP_URL, {
+    method: "POST",
+    mode: "no-cors",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify(payload),
+    keepalive: true
+  })
+    .then(() => {
+      if (status) {
+        status.textContent =
+          "紀錄已送出，請至 Google Sheets 確認寫入結果。";
+      }
+    })
+    .catch(error => {
+      console.error("學習紀錄送出失敗：", error);
+
+      if (status) {
+        status.textContent =
+          "紀錄送出失敗，請檢查網路與 Apps Script。";
+      }
+    });
+};
